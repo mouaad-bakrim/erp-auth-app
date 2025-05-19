@@ -1,5 +1,7 @@
+# Nom du workflow (visible dans l'onglet Actions sur GitHub)
 name: CI/CD for ERP App
 
+# Déclenche le workflow sur chaque push ou pull request vers la branche main
 on:
   push:
     branches:
@@ -8,42 +10,47 @@ on:
     branches:
       - main
 
+# Variables d’environnement utilisées dans tout le workflow
 env:
-  DJANGO_SECRET_KEY: super-secret
-  DEBUG: False
-  ALLOWED_HOSTS: localhost,127.0.0.1
-  POSTGRES_DB: erp_db
-  POSTGRES_USER: erp_user
-  POSTGRES_PASSWORD: erp_pass
+  DJANGO_SECRET_KEY: super-secret            # Clé secrète pour Django
+  DEBUG: False                               # Mode debug désactivé
+  ALLOWED_HOSTS: localhost,127.0.0.1         # Hôtes autorisés pour Django
+  POSTGRES_DB: erp_db                        # Nom de la base de données
+  POSTGRES_USER: erp_user                    # Nom d'utilisateur de la base
+  POSTGRES_PASSWORD: erp_pass                # Mot de passe de la base
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+  build-and-deploy:                          # Nom du job
+    runs-on: ubuntu-latest                   # Le job s'exécute sur une machine Ubuntu
 
+    # On lance un service PostgreSQL pour les tests Django
     services:
       postgres:
-        image: postgres:14
+        image: postgres:14                   # Utilise l’image officielle de PostgreSQL
         env:
           POSTGRES_DB: ${{ env.POSTGRES_DB }}
           POSTGRES_USER: ${{ env.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
         ports: ['5432:5432']
         options: >-
-          --health-cmd="pg_isready"
+          --health-cmd="pg_isready"          # Vérifie que la base est prête
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
     steps:
+    # 1. Récupère le code du dépôt
     - name: 🧾 Checkout repo
       uses: actions/checkout@v3
 
-    # ─────────────────────── BACKEND (Django) ───────────────────────
+    # ─────── PARTIE BACKEND (Django) ───────
+    # 2. Configure Python
     - name: 🐍 Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
 
+    # 3. Installe les dépendances Django
     - name: 🐍 Install dependencies
       working-directory: ./backend
       run: |
@@ -51,6 +58,7 @@ jobs:
         source venv/bin/activate
         pip install -r requirements.txt
 
+    # 4. Exécute les migrations et les tests Django
     - name: ⚙️ Run Django tests
       working-directory: ./backend
       run: |
@@ -58,37 +66,41 @@ jobs:
         python manage.py migrate
         python manage.py test
 
-    # ─────────────────────── FRONTEND (Next.js) ───────────────────────
+    # ─────── PARTIE FRONTEND (Next.js) ───────
+    # 5. Configure Node.js
     - name: 🧰 Set up Node.js
       uses: actions/setup-node@v3
       with:
         node-version: '18'
 
+    # 6. Installe les dépendances frontend
     - name: 📦 Install frontend dependencies
       working-directory: ./frontend
       run: npm install
 
+    # 7. Compile le frontend (build de production)
     - name: 🛠️ Build frontend
       working-directory: ./frontend
       run: npm run build
 
-    # ─────────────────────── DOCKER (Optional) ───────────────────────
+    # ─────── PUSH VERS DOCKER HUB ───────
+    # 8. Connexion à Docker Hub avec les secrets
     - name: 🔐 Login to Docker Hub
       uses: docker/login-action@v3
       with:
-        username: ${{ secrets.DOCKER_USERNAME }}
+        username: ${{ secrets.DOCKER_USERNAME }}   # Défini dans GitHub > Settings > Secrets
         password: ${{ secrets.DOCKER_PASSWORD }}
 
+    # 9. Build et push de l’image Docker du backend
     - name: 🐳 Build and push backend Docker image
       working-directory: ./backend
       run: |
         docker build -t ${{ secrets.DOCKER_USERNAME }}/erp-backend:latest .
         docker push ${{ secrets.DOCKER_USERNAME }}/erp-backend:latest
 
+    # 10. Build et push de l’image Docker du frontend
     - name: 🐳 Build and push frontend Docker image
       working-directory: ./frontend
       run: |
         docker build -t ${{ secrets.DOCKER_USERNAME }}/erp-frontend:latest .
         docker push ${{ secrets.DOCKER_USERNAME }}/erp-frontend:latest
-
-    # Optionnel : ajout d’un job de déploiement ici selon ton hébergeur

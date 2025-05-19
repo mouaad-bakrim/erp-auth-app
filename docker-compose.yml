@@ -1,18 +1,30 @@
-version: '3.8'
-
+version: "3.8"
 services:
   backend:
     build: ./backend
-    container_name: erp-backend
+    container_name: django-backend
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - db
 
   frontend:
     build: ./frontend
-    container_name: erp-frontend
+    container_name: nextjs-frontend
     ports:
       - "3000:3000"
+
+  db:
+    image: postgres:15
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: erp_db
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: erp_pass
     volumes:
-      - ./frontend:/app
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
